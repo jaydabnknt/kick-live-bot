@@ -8,6 +8,7 @@ const DEFAULT_OFFLINE_TPL = '⚫ <b>{streamer}</b> was live on Kick — stream e
 const COOLDOWN_MS = 0; // 0 = alert every time they go live. e.g. 10 * 60 * 1000 = skip re-alerts within 10 min
 const KICK_BATCH = 25;
 const UNPIN_AFTER_MS = 5 * 60 * 1000; // unpin a pinned alert this long after the stream ends
+const VERSION = '2026-11-01 auto-deploy';
 const CHECKS_PER_MINUTE = 3; // 3 = every 20 seconds. Keep it at 4 or less.
 
 const SCHEMA = [
@@ -111,7 +112,7 @@ export default {
       }
     }
 
-    return new Response('Kick live bot is running.');
+    return new Response('Kick live bot is running. Version: ' + VERSION);
   },
 
   // Cron fires once a minute; inside each run we check several times, spaced out
