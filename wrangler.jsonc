@@ -1,0 +1,23 @@
+// Cloudflare settings for the Kick live alerts bot.
+// Cloudflare reads this on every automatic deploy, so the worker always matches it.
+// Secrets (BOT_TOKEN, KICK_CLIENT_ID, KICK_CLIENT_SECRET, WEBHOOK_SECRET) are NOT stored here;
+// they stay in the Cloudflare dashboard and are kept on every deploy.
+{
+  "name": "silent-disk-e913",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+
+  // the database the bot keeps chats, streamers and settings in
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kickbot",
+      "database_id": "PASTE_YOUR_D1_DATABASE_ID_HERE"
+    }
+  ],
+
+  // run the live checks every minute
+  "triggers": { "crons": ["* * * * *"] },
+
+  "observability": { "enabled": true }
+}

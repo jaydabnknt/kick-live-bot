@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kick Live Alerts</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --page: var(--tg-theme-secondary-bg-color, #0e1013);
+    --card: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #181b20));
+    --text: var(--tg-theme-text-color, #eef0f2);
+    --hint: var(--tg-theme-hint-color, #8a919b);
+    --link: var(--tg-theme-link-color, #5fb4f5);
+    --head: var(--tg-theme-section-header-text-color, var(--hint));
+    --danger: var(--tg-theme-destructive-text-color, #ff5c5c);
+    --sep: rgba(127, 127, 127, .16);
+    --accent: #53fc18;
+    --accent-ink: #08130a;
+    --live: #ff3b4e;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--page); color: var(--text); }
+  body {
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    padding: 12px 16px calc(28px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  h1 { font-size: 22px; line-height: 1.2; margin: 6px 0 2px; letter-spacing: -.01em; }
+  .sub { color: var(--hint); font-size: 13.5px; margin: 0 0 16px; }
+  .section { color: var(--head); font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin: 22px 4px 8px; }
+  .card { background: var(--card); border-radius: var(--radius); overflow: hidden; }
+  .card + .card { margin-top: 10px; }
+  .row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 10px 14px;
+    background: none; border: 0; text-align: left; position: relative;
+  }
+  .row + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 1px solid var(--sep); }
+  button.row { cursor: pointer; }
+  button.row:active { background: var(--sep); }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meta { color: var(--hint); font-size: 13px; }
+  .chev { color: var(--hint); font-size: 18px; line-height: 1; }
+  .icon { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; font-size: 16px; background: var(--sep); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--hint); opacity: .5; flex: none; }
+  .dot.live { background: var(--live); opacity: 1; box-shadow: 0 0 0 4px rgba(255, 59, 78, .18); }
+  .tag { font-size: 11.5px; padding: 2px 7px; border-radius: 99px; background: var(--sep); color: var(--hint); white-space: nowrap; }
+  .tag.live { background: rgba(255, 59, 78, .16); color: var(--live); font-weight: 600; }
+  .tag.green { background: rgba(83, 252, 24, .16); color: #3cc80c; font-weight: 600; }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; padding: 10px 16px;
+    border: 0; border-radius: 12px; font-weight: 600; cursor: pointer; background: var(--card); color: var(--link);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: .5; }
+  .btn + .btn, .btns + .btn, .btn + .btns { margin-top: 10px; }
+  .btns { display: flex; gap: 10px; }
+  .btns .btn { margin: 0; }
+
+  .field { display: flex; gap: 8px; padding: 10px; }
+  input.text, textarea.text {
+    width: 100%; border: 1px solid var(--sep); background: var(--page); border-radius: 10px; padding: 11px 12px; outline: none;
+  }
+  input.text:focus, textarea.text:focus { border-color: var(--accent); }
+  textarea.text { min-height: 150px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.5; }
+  .field .btn { width: auto; flex: none; min-height: 44px; }
+
+  /* switch */
+  .switch { position: relative; width: 46px; height: 28px; flex: none; }
+  .switch input { opacity: 0; position: absolute; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--sep); transition: background .15s; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+
+  /* segmented */
+  .seg { display: flex; background: var(--page); border-radius: 10px; padding: 3px; gap: 3px; margin: 0 14px 12px; }
+  .seg button { flex: 1; border: 0; background: none; padding: 8px 4px; border-radius: 8px; font-size: 13px; font-weight: 550; color: var(--hint); cursor: pointer; }
+  .seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .seglabel { padding: 12px 14px 8px; font-weight: 550; }
+  .seglabel .meta { font-weight: 400; color: var(--hint); font-size: 13px; }
+
+  .msg {
+    margin: 0 14px 12px; padding: 10px 12px; border-radius: 12px 12px 12px 4px; background: var(--page);
+    white-space: pre-wrap; word-wrap: break-word; font-size: 14.5px;
+  }
+  .msg a { color: var(--link); }
+  .msg code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .msg tg-spoiler, .msg .tg-spoiler { background: var(--hint); color: transparent; border-radius: 3px; }
+  .msglabel { padding: 12px 14px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .msglabel b { font-weight: 550; }
+  .linkbtn { border: 0; background: none; color: var(--link); font-weight: 600; cursor: pointer; padding: 4px 0; }
+
+  .warn { margin: 10px 0 0; padding: 11px 13px; border-radius: 12px; background: rgba(255, 176, 32, .13); color: #e0a020; font-size: 13.5px; }
+  .note { padding: 12px 14px; color: var(--hint); font-size: 13.5px; }
+  .err { color: var(--danger); font-size: 13.5px; padding: 0 14px 12px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 4px; }
+  .chip { border: 1px solid var(--sep); background: none; border-radius: 99px; padding: 5px 10px; font-size: 12.5px; cursor: pointer; color: var(--link); font-family: ui-monospace, Menlo, monospace; }
+  .tools { display: flex; gap: 6px; padding: 10px 10px 0; }
+  .tool { border: 0; background: var(--page); border-radius: 8px; min-width: 38px; height: 34px; cursor: pointer; font-size: 14px; }
+
+  .hero { text-align: center; padding: 28px 8px 8px; }
+  .hero .badge { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 22px; background: #000; display: grid; place-items: center; }
+  .hero h1 { margin-bottom: 6px; }
+  .hero p { color: var(--hint); margin: 0 auto 22px; max-width: 320px; }
+
+  .code { font: 600 22px/1.2 ui-monospace, Menlo, monospace; letter-spacing: .08em; text-align: center; padding: 16px 14px 6px; user-select: all; }
+  .codelink { text-align: center; color: var(--hint); font-size: 12.5px; padding: 0 14px 14px; word-break: break-all; user-select: all; }
+
+  .status { padding: 14px; white-space: pre-wrap; font-size: 14px; }
+  .skeleton { height: 50px; border-radius: var(--radius); background: var(--card); opacity: .6; margin-top: 10px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .center { text-align: center; color: var(--hint); padding: 40px 10px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0;
+    background: rgba(20, 22, 26, .94); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 32px);
+    transition: opacity .2s, transform .2s; pointer-events: none; z-index: 10; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script>
+(function () {
+  'use strict';
+  var TG = window.Telegram && window.Telegram.WebApp;
+  var initData = TG ? TG.initData : '';
+  var app = document.getElementById('app');
+  var stack = [];
+  var token = 0;
+
+  if (TG) {
+    TG.ready();
+    TG.expand();
+    try { TG.setHeaderColor('secondary_bg_color'); TG.setBackgroundColor('secondary_bg_color'); } catch (e) {}
+    TG.BackButton.onClick(function () { back(); });
+  }
+
+  var BANANA = "<svg viewBox=\"0 0 17 15\" width=\"46\" height=\"40\" shape-rendering=\"crispEdges\" fill=\"#53fc18\"><rect x=\"13\" y=\"0\" width=\"1\" height=\"1\"/><rect x=\"13\" y=\"1\" width=\"2\" height=\"1\"/><rect x=\"12\" y=\"2\" width=\"3\" height=\"1\"/><rect x=\"12\" y=\"3\" width=\"4\" height=\"1\"/><rect x=\"12\" y=\"4\" width=\"4\" height=\"1\"/><rect x=\"11\" y=\"5\" width=\"5\" height=\"1\"/><rect x=\"11\" y=\"6\" width=\"5\" height=\"1\"/><rect x=\"10\" y=\"7\" width=\"5\" height=\"1\"/><rect x=\"9\" y=\"8\" width=\"6\" height=\"1\"/><rect x=\"8\" y=\"9\" width=\"6\" height=\"1\"/><rect x=\"6\" y=\"10\" width=\"7\" height=\"1\"/><rect x=\"4\" y=\"11\" width=\"8\" height=\"1\"/><rect x=\"1\" y=\"12\" width=\"9\" height=\"1\"/><rect x=\"0\" y=\"13\" width=\"7\" height=\"1\"/><rect x=\"1\" y=\"14\" width=\"3\" height=\"1\"/></svg>";
+
+  /* ---------- helpers ---------- */
+  function h(tag, attrs) {
+    var el = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      var v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k === 'html') el.innerHTML = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function add(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { add(el, x); }); return; }
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  var toastTimer;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2400);
+  }
+  function haptic(kind) {
+    try {
+      if (kind === 'ok') TG.HapticFeedback.notificationOccurred('success');
+      else if (kind === 'err') TG.HapticFeedback.notificationOccurred('error');
+      else TG.HapticFeedback.selectionChanged();
+    } catch (e) {}
+  }
+  function alertBox(msg) {
+    return new Promise(function (res) {
+      if (TG && TG.showAlert) { try { TG.showAlert(msg, res); return; } catch (e) {} }
+      window.alert(msg); res();
+    });
+  }
+  function confirmBox(msg) {
+    return new Promise(function (res) {
+      if (TG && TG.showConfirm) { try { TG.showConfirm(msg, res); return; } catch (e) {} }
+      res(window.confirm(msg));
+    });
+  }
+  // ask Group or Channel, then open Telegram's add-bot screen
+  function addMe(bot, pin) {
+    var links = {
+      group: 'https://t.me/' + bot + '?startgroup=true' + (pin ? '&admin=pin_messages' : ''),
+      channel: 'https://t.me/' + bot + '?startchannel=true&admin=post_messages' + (pin ? '+edit_messages+pin_messages' : ''),
+    };
+    var msg = pin ? "I'll ask to be an admin that can pin alerts. Where do you want me?" : 'Where do you want me?';
+    if (TG && TG.showPopup) {
+      try {
+        TG.showPopup({
+          title: pin ? 'Add with pin permissions' : 'Add me',
+          message: msg,
+          buttons: [{ id: 'group', type: 'default', text: 'Group' }, { id: 'channel', type: 'default', text: 'Channel' }, { type: 'cancel' }],
+        }, function (id) { if (links[id]) openTg(links[id]); });
+        return;
+      } catch (e) {}
+    }
+    openTg(window.confirm(msg + '\n\nOK = Group, Cancel = Channel') ? links.group : links.channel);
+  }
+  function openTg(url) { if (TG && TG.openTelegramLink) TG.openTelegramLink(url); else window.open(url, '_blank'); }
+  function openUrl(url) { if (TG && TG.openLink) TG.openLink(url); else window.open(url, '_blank'); }
+
+  function api(action, data) {
+    var body = Object.assign({ initData: initData, action: action }, data || {});
+    return fetch('api', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'Bad response from the bot.' }; }).then(function (j) {
+          if (r.status === 401) throw new Error('Your session expired. Close the app and open it again.');
+          if (j.error === 'locked') { stack = [{ name: 'locked' }]; render(); throw new Error('locked'); }
+          if (j.error) throw new Error(j.error);
+          return j;
+        });
+      });
+  }
+  // run an action with a busy button; shows errors
+  function act(btn, fn) {
+    if (btn) btn.disabled = true;
+    return Promise.resolve().then(fn).catch(function (e) {
+      if (e.message !== 'locked') { haptic('err'); alertBox(e.message); }
+    }).then(function () { if (btn) btn.disabled = false; });
+  }
+
+  /* Telegram-HTML message preview (only safe tags survive) */
+  var OK_TAGS = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, INS: 1, S: 1, STRIKE: 1, DEL: 1, CODE: 1, PRE: 1, A: 1, 'TG-SPOILER': 1, BLOCKQUOTE: 1, SPAN: 1, BR: 1 };
+  function cleanNode(node) {
+    Array.prototype.slice.call(node.childNodes).forEach(function (c) {
+      if (c.nodeType === 3) return;
+      if (c.nodeType !== 1 || /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|SVG|MATH)$/.test(c.tagName)) { c.remove(); return; }
+      cleanNode(c);
+      if (!OK_TAGS[c.tagName]) { c.replaceWith.apply(c, Array.prototype.slice.call(c.childNodes)); return; }
+      var href = c.tagName === 'A' ? c.getAttribute('href') : null;
+      var cls = c.tagName === 'SPAN' && c.getAttribute('class') === 'tg-spoiler' ? 'tg-spoiler' : null;
+      Array.prototype.slice.call(c.attributes).forEach(function (at) { c.removeAttribute(at.name); });
+      if (href && /^https?:\/\//i.test(href)) {
+        c.setAttribute('href', href);
+        c.addEventListener('click', function (e) { e.preventDefault(); openUrl(href); });
+      }
+      if (cls) c.setAttribute('class', cls);
+    });
+  }
+  function msgView(html) {
+    var doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+    var root = doc.body.firstChild || doc.createElement('div');
+    cleanNode(root);
+    var box = h('div', { class: 'msg' });
+    while (root.firstChild) box.appendChild(document.adoptNode(root.firstChild));
+    box.querySelectorAll('a[href]').forEach(function (a) {
+      a.addEventListener('click', function (e) { e.preventDefault(); openUrl(a.getAttribute('href')); });
+    });
+    return box;
+  }
+  function sampleVars(slug) {
+    return { streamer: slug, title: 'Example stream title', category: 'Just Chatting', viewers: '1234', url: 'https://kick.com/' + slug, duration: '2h 15m' };
+  }
+  function renderTpl(tpl, vars) {
+    return tpl.replace(/\{(\w+)\}/g, function (m, k) { return k in vars ? esc(vars[k]) : m; });
+  }
+
+  /* ---------- navigation ---------- */
+  function go(name, params) { stack.push({ name: name, params: params || {} }); render(); window.scrollTo(0, 0); }
+  function back() { if (stack.length > 1) { stack.pop(); render(); } }
+  function replaceTop(name, params) { stack[stack.length - 1] = { name: name, params: params || {} }; render(); }
+  function render() {
+    var cur = stack[stack.length - 1];
+    if (TG) { if (stack.length > 1) TG.BackButton.show(); else TG.BackButton.hide(); }
+    var my = ++token;
+    app.innerHTML = '';
+    app.appendChild(loading());
+    Promise.resolve(screens[cur.name](cur.params)).then(function (view) {
+      if (my !== token || !view) return;
+      app.innerHTML = '';
+      app.appendChild(view);
+    }).catch(function (e) {
+      if (my !== token || e.message === 'locked') return;
+      app.innerHTML = '';
+      app.appendChild(h('div', null,
+        h('div', { class: 'center', text: e.message }),
+        h('button', { class: 'btn', onclick: function () { render(); } }, 'Try again')));
+    });
+  }
+  function refresh() { render(); }
+  function loading() { return h('div', null, h('div', { class: 'skeleton', style: 'width:55%;height:26px;margin-top:6px' }), h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' })); }
+
+  function rowBtn(opts) {
+    return h('button', { class: 'row', onclick: opts.onclick },
+      opts.left,
+      h('div', { class: 'grow' }, h('div', { class: 'title', text: opts.title }), opts.meta ? h('div', { class: 'meta', text: opts.meta }) : null),
+      opts.right, h('span', { class: 'chev', text: '›' }));
+  }
+  function toggleRow(label, meta, checked, onchange) {
+    var input = h('input', { type: 'checkbox' });
+    input.checked = !!checked;
+    input.addEventListener('change', function () { haptic(); onchange(input.checked, input); });
+    return h('label', { class: 'row' },
+      h('div', { class: 'grow' }, h('div', { text: label }), meta ? h('div', { class: 'meta', text: meta }) : null),
+      h('span', { class: 'switch' }, input, h('span')));
+  }
+  function segmented(options, value, onpick) {
+    var wrap = h('div', { class: 'seg' });
+    options.forEach(function (o, i) {
+      wrap.appendChild(h('button', {
+        class: i === value ? 'on' : '', text: o,
+        onclick: function () {
+          if (i === value) return;
+          haptic();
+          wrap.querySelectorAll('button').forEach(function (b, j) { b.className = j === i ? 'on' : ''; });
+          value = i; onpick(i);
+        },
+      }));
+    });
+    return wrap;
+  }
+
+  /* ---------- screens ---------- */
+  var screens = {};
+
+  screens.outside = function () {
+    return h('div', { class: 'hero' },
+      h('div', { class: 'badge', html: BANANA }),
+      h('h1', { text: 'Kick Live Alerts' }),
+      h('p', { text: 'Open this app from the bot in Telegram.' }));
+  };
+
+  screens.boot = function () {
+    return api('me').then(function (me) {
+      window.__me = me;
+      replaceTop(me.allowed ? 'home' : 'locked');
+    });
+  };
+
+  screens.locked = function (p) {
+    return api('me').then(function (me) {
+      var input = h('input', { class: 'text', placeholder: 'Access code', autocomplete: 'off', autocapitalize: 'characters' });
+      var err = h('div', { class: 'err' });
+      function unlock(btn) {
+        err.textContent = '';
+        return act(btn, function () {
+          return api('redeem', { code: input.value }).then(function (r) {
+            if (r.result === 'invalid') { haptic('err'); err.textContent = "That code isn't valid or was already used."; return; }
+            haptic('ok');
+            toast(r.result === 'owner' ? '👑 You are now the owner' : '✅ Access granted');
+            stack = [{ name: 'home' }]; render();
+          });
+        });
+      }
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') unlock(); });
+      var unlockBtn = h('button', { class: 'btn primary', onclick: function () { unlock(unlockBtn); } }, 'Unlock');
+      var reqBtn = h('button', {
+        class: 'btn',
+        onclick: function () {
+          act(reqBtn, function () { return api('request').then(function (r) { haptic('ok'); alertBox(r.message); }); });
+        },
+      }, '🙋 Request access');
+      return h('div', null,
+        h('div', { class: 'hero' },
+          h('div', { class: 'badge', html: BANANA }),
+          h('h1', { text: 'This bot is private' }),
+          h('p', { text: "It's completely free. You just need access: enter a code from the owner, or ask for one." })),
+        h('div', { class: 'card' }, h('div', { class: 'field' }, input), err),
+        h('div', { style: 'height:10px' }),
+        unlockBtn,
+        h('div', { class: 'section', text: 'No code?' }),
+        reqBtn,
+        me.ownerUsername ? h('button', { class: 'btn', onclick: function () { openTg('https://t.me/' + me.ownerUsername); } }, '💬 Message the owner') : null);
+    });
+  };
+
+  screens.home = function () {
+    return api('home').then(function (d) {
+      var bot = d.bot;
+      var chats = d.chats.length
+        ? h('div', { class: 'card' }, d.chats.map(function (c) {
+            return rowBtn({
+              left: h('div', { class: 'icon', text: '💬' }),
+              title: c.title,
+              meta: c.n + (c.n === 1 ? ' streamer' : ' streamers'),
+              right: c.live ? h('span', { class: 'tag live', text: c.live + ' live' }) : null,
+              onclick: function () { go('chat', { chatId: c.chat_id }); },
+            });
+          }))
+        : h('div', { class: 'card' }, h('div', { class: 'note', text: "You haven't added me to a group or channel yet. Add me below, then come back here." }));
+      var addLinks = bot ? h('div', { class: 'card' },
+        rowBtn({ left: h('div', { class: 'icon', text: '➕' }), title: 'Add to group/channel', meta: 'Posts alerts', onclick: function () { addMe(bot, false); } }),
+        rowBtn({ left: h('div', { class: 'icon', text: '📌' }), title: 'Add with pin permissions', meta: 'Group/channel · posts and pins alerts', onclick: function () { addMe(bot, true); } })) : null;
+      return h('div', null,
+        h('h1', { text: 'Kick Live Alerts' }),
+        h('p', { class: 'sub', text: 'Posts in your chats when your streamers go live.' }),
+        h('div', { class: 'section', text: 'Your chats' }), chats,
+        h('div', { class: 'section', text: 'Add me' }), addLinks,
+        h('div', { class: 'section', text: 'More' }),
+        h('div', { class: 'card' },
+          rowBtn({ left: h('div', { class: 'icon', text: '📊' }), title: 'Status', meta: 'Check that live checks are working', onclick: function () { go('status'); } }),
+          d.isOwner ? rowBtn({ left: h('div', { class: 'icon', text: '👑' }), title: 'Access', meta: 'Codes, requests and people', onclick: function () { go('access'); } }) : null));
+    });
+  };
+
+  screens.chat = function (p) {
+    return api('chat', { chatId: p.chatId }).then(function (d) {
+      var input = h('input', { class: 'text', placeholder: 'Kick name or link, e.g. xqc', autocomplete: 'off', autocapitalize: 'none' });
+      var err = h('div', { class: 'err' });
+      var addBtn = h('button', { class: 'btn primary', onclick: function () { addIt(); } }, 'Add');
+      function addIt() {
+        err.textContent = '';
+        if (!input.value.trim()) { input.focus(); return; }
+        act(addBtn, function () {
+          return api('addStreamer', { chatId: d.chat.id, input: input.value }).then(function (r) {
+            haptic('ok'); toast('✅ Now watching ' + r.slug);
+            input.value = '';
+            go('sub', { id: r.subId });
+          }).catch(function (e) { if (e.message !== 'locked') { haptic('err'); err.textContent = e.message; } });
+        });
+      }
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') addIt(); });
+      return h('div', null,
+        h('h1', { text: d.chat.title }),
+        h('p', { class: 'sub', text: 'Streamers I announce here' }),
+        d.subs.length ? h('div', { class: 'card' }, d.subs.map(function (s) {
+          var tags = [];
+          if (s.is_live) tags.push(h('span', { class: 'tag live', text: 'LIVE' }));
+          if (s.enabled === 0) tags.push(h('span', { class: 'tag', text: 'Paused' }));
+          if (s.pin) tags.push(h('span', { class: 'tag', text: '📌' }));
+          return rowBtn({
+            left: h('span', { class: 'dot' + (s.is_live ? ' live' : '') }),
+            title: s.slug, right: tags.length ? h('div', { style: 'display:flex;gap:6px' }, tags) : null,
+            onclick: function () { go('sub', { id: s.id }); },
+          });
+        })) : h('div', { class: 'card' }, h('div', { class: 'note', text: 'No streamers yet. Add one below.' })),
+        h('div', { class: 'section', text: 'Add streamer' }),
+        h('div', { class: 'card' }, h('div', { class: 'field' }, input, addBtn), err));
+    });
+  };
+
+  screens.sub = function (p) {
+    return api('sub', { id: p.id }).then(function (d) {
+      var s = d.sub;
+      var warnBox = h('div');
+      function showWarn(w) {
+        warnBox.innerHTML = '';
+        if (w) warnBox.appendChild(h('div', { class: 'warn', text: '⚠️ ' + w + ' Make me an admin there with that right, or remove me and re-add me with “Add to group/channel with pin permissions”.' }));
+      }
+      showWarn(d.pinWarn);
+      function set(field, value) {
+        return api('setSub', { id: s.id, field: field, value: value }).then(function (r) {
+          s[field] = value;
+          if (field === 'pin') showWarn(r.pinWarn);
+          return r;
+        }).catch(function (e) { if (e.message !== 'locked') { haptic('err'); alertBox(e.message); refresh(); } });
+      }
+      var vars = sampleVars(s.slug);
+      var offVars = Object.assign({}, vars, { viewers: '' });
+
+      var offlineBlock = h('div');
+      function drawOffline() {
+        offlineBlock.innerHTML = '';
+        if (!s.offline_edit) return;
+        offlineBlock.appendChild(h('div', { class: 'msglabel' },
+          h('b', { text: s.offline_edit === 2 ? 'Stream-ended message' : 'Alert changes to' }),
+          h('button', { class: 'linkbtn', onclick: function () { go('editor', { id: s.id, which: 'offline', slug: s.slug, text: s.offline_tpl }); } }, 'Edit')));
+        offlineBlock.appendChild(msgView(renderTpl(s.offline_tpl, offVars)));
+      }
+      drawOffline();
+
+      var previewBtn = h('button', { class: 'btn', onclick: function () {
+        act(previewBtn, function () { return api('preview', { id: s.id }).then(function () { haptic('ok'); toast('👁 Preview sent to your chat with the bot'); }); });
+      } }, '👁 Preview');
+      var testBtn = h('button', { class: 'btn', onclick: function () {
+        confirmBox('Post a test alert in “' + s.chatTitle + '”? Everyone there will see it.').then(function (yes) {
+          if (yes) act(testBtn, function () { return api('test', { id: s.id }).then(function () { haptic('ok'); toast('📣 Test sent to ' + s.chatTitle); }); });
+        });
+      } }, '📣 Test in chat');
+      var resetBtn = h('button', { class: 'btn', onclick: function () {
+        confirmBox('Reset both messages to the default text?').then(function (yes) {
+          if (yes) act(resetBtn, function () { return api('reset', { id: s.id }).then(function () { haptic('ok'); toast('↩️ Messages reset'); refresh(); }); });
+        });
+      } }, '↩️ Default messages');
+      var removeBtn = h('button', { class: 'btn danger', onclick: function () {
+        confirmBox('Stop announcing ' + s.slug + ' in “' + s.chatTitle + '”?').then(function (yes) {
+          if (yes) act(removeBtn, function () { return api('removeSub', { id: s.id }).then(function () { haptic('ok'); toast('🗑 Removed ' + s.slug); back(); }); });
+        });
+      } }, '🗑 Remove streamer');
+
+      return h('div', null,
+        h('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:6px' },
+          h('h1', { style: 'margin:0', text: s.slug }),
+          s.isLive ? h('span', { class: 'tag live', text: 'LIVE' }) : null),
+        h('p', { class: 'sub' }, 'kick.com/' + s.slug + ' → ' + s.chatTitle),
+
+        h('div', { class: 'card' },
+          toggleRow('Alerts', s.enabled ? 'On' : 'Paused. Nothing is posted.', s.enabled, function (on, el) {
+            set('enabled', on ? 1 : 0).then(function () { el.closest('.row').querySelector('.meta').textContent = on ? 'On' : 'Paused. Nothing is posted.'; });
+          })),
+
+        h('div', { class: 'section', text: 'Live alert' }),
+        h('div', { class: 'card' },
+          h('div', { class: 'msglabel' }, h('b', { text: 'Message' }),
+            h('button', { class: 'linkbtn', onclick: function () { go('editor', { id: s.id, which: 'live', slug: s.slug, text: s.template }); } }, 'Edit')),
+          msgView(renderTpl(s.template, vars)),
+          toggleRow('Thumbnail photo', 'Post the stream picture with the alert', s.photo, function (on) { set('photo', on ? 1 : 0); }),
+          toggleRow('Link preview', 'Show the kick.com preview card', s.preview, function (on) { set('preview', on ? 1 : 0); })),
+
+        h('div', { class: 'section', text: 'Pin alert' }),
+        h('div', { class: 'card' },
+          h('div', { class: 'seglabel' }, h('div', { class: 'meta', text: 'Pinned alerts are unpinned 5 minutes after the stream ends.' })),
+          segmented(['Off', 'Quietly', 'Notify all'], s.pin, function (i) { set('pin', i); })),
+        warnBox,
+
+        h('div', { class: 'section', text: 'When the stream ends' }),
+        h('div', { class: 'card' },
+          h('div', { style: 'height:12px' }),
+          segmented(['Nothing', 'Edit alert', 'New message'], s.offline_edit, function (i) { set('offline_edit', i).then(function () { drawOffline(); }); }),
+          offlineBlock),
+
+        h('div', { class: 'section', text: 'Try it' }),
+        h('div', { class: 'btns' }, previewBtn, testBtn),
+        h('div', { class: 'section', text: 'Manage' }),
+        resetBtn, removeBtn);
+    });
+  };
+
+  screens.editor = function (p) {
+    var live = p.which === 'live';
+    var area = h('textarea', { class: 'text', spellcheck: 'false' });
+    area.value = p.text || '';
+    var prev = h('div');
+    var err = h('div', { class: 'err' });
+    var vars = sampleVars(p.slug);
+    if (!live) vars.viewers = '';
+    function draw() { prev.innerHTML = ''; prev.appendChild(msgView(renderTpl(area.value, vars))); }
+    area.addEventListener('input', draw);
+    draw();
+    function insert(before, after) {
+      var a = area.selectionStart, b = area.selectionEnd, v = area.value;
+      area.value = v.slice(0, a) + before + v.slice(a, b) + (after || '') + v.slice(b);
+      var pos = after ? a + before.length + (b - a) : a + before.length;
+      area.focus(); area.setSelectionRange(after ? a + before.length : pos, pos);
+      draw(); haptic();
+    }
+    function wrap(tag) { return function () { insert('<' + tag + '>', '</' + tag + '>'); }; }
+    var tools = h('div', { class: 'tools' },
+      h('button', { class: 'tool', onclick: wrap('b'), html: '<b>B</b>' }),
+      h('button', { class: 'tool', onclick: wrap('i'), html: '<i>I</i>' }),
+      h('button', { class: 'tool', onclick: wrap('u'), html: '<u>U</u>' }),
+      h('button', { class: 'tool', onclick: wrap('s'), html: '<s>S</s>' }),
+      h('button', { class: 'tool', onclick: wrap('code'), text: '</>' }),
+      h('button', { class: 'tool', onclick: function () { insert('<a href="https://">', '</a>'); }, text: '🔗' }));
+    var names = live ? ['streamer', 'title', 'category', 'viewers', 'url'] : ['streamer', 'title', 'category', 'duration', 'url'];
+    var chips = h('div', { class: 'chips' }, names.map(function (n) {
+      return h('button', { class: 'chip', text: '{' + n + '}', onclick: function () { insert('{' + n + '}'); } });
+    }));
+    var saveBtn = h('button', { class: 'btn primary', onclick: function () {
+      err.textContent = '';
+      act(saveBtn, function () {
+        return api('saveTemplate', { id: p.id, which: p.which, text: area.value }).then(function () {
+          haptic('ok'); toast('✅ Message saved'); back();
+        }).catch(function (e) { if (e.message !== 'locked') { haptic('err'); err.textContent = e.message; } });
+      });
+    } }, 'Save');
+    return h('div', null,
+      h('h1', { text: live ? 'Live alert message' : 'Stream-ended message' }),
+      h('p', { class: 'sub', text: 'Select text and tap a style, or tap a placeholder to insert it.' }),
+      h('div', { class: 'card' }, tools, chips, h('div', { class: 'field' }, area), err),
+      h('div', { class: 'section', text: 'Preview (example values)' }),
+      h('div', { class: 'card' }, h('div', { style: 'height:12px' }), prev),
+      h('div', { style: 'height:16px' }),
+      saveBtn);
+  };
+
+  screens.status = function () {
+    return api('status').then(function (d) {
+      var box = msgView(d.html);
+      box.className = 'status';
+      return h('div', null,
+        h('h1', { text: 'Status' }),
+        h('p', { class: 'sub', text: 'Only your own streamers and chats are shown.' }),
+        h('div', { class: 'card' }, box),
+        h('div', { style: 'height:12px' }),
+        h('button', { class: 'btn', onclick: refresh }, '🔄 Refresh'));
+    });
+  };
+
+  screens.access = function (p) {
+    return api('access').then(function (d) {
+      var codeCard = h('div');
+      function showCode(code) {
+        var link = d.bot ? 'https://t.me/' + d.bot + '?start=' + code : '';
+        codeCard.innerHTML = '';
+        codeCard.appendChild(h('div', { class: 'card' },
+          h('div', { class: 'code', text: code }),
+          link ? h('div', { class: 'codelink', text: link }) : null));
+        codeCard.appendChild(h('div', { style: 'height:10px' }));
+        codeCard.appendChild(h('div', { class: 'btns' },
+          h('button', { class: 'btn', onclick: function () { copy(code); } }, '📋 Copy code'),
+          link ? h('button', { class: 'btn', onclick: function () {
+            openTg('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Here is your access to the Kick live alerts bot'));
+          } }, '📤 Share link') : null));
+      }
+      if (p.newCode) showCode(p.newCode);
+      var newBtn = h('button', { class: 'btn primary', onclick: function () {
+        act(newBtn, function () {
+          return api('newCode').then(function (r) { haptic('ok'); stack[stack.length - 1].params = { newCode: r.code }; render(); });
+        });
+      } }, '🔑 New access code');
+
+      var reqs = d.requests.length ? h('div', { class: 'card' }, d.requests.map(function (r) {
+        var yes = h('button', { class: 'btn primary', style: 'width:auto;min-height:36px;padding:6px 12px' }, 'Give access');
+        var no = h('button', { class: 'btn', style: 'width:auto;min-height:36px;padding:6px 12px;color:var(--hint)' }, 'Ignore');
+        yes.onclick = function () { act(yes, function () { return api('decide', { userId: r.userId, ok: true }).then(function () { haptic('ok'); toast('✅ Gave access to ' + r.name); refresh(); }); }); };
+        no.onclick = function () { act(no, function () { return api('decide', { userId: r.userId, ok: false }).then(function () { toast('Ignored ' + r.name); refresh(); }); }); };
+        return h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { class: 'title', text: r.name }), h('div', { class: 'meta', text: 'Asked ' + ago(r.at) })), no, yes);
+      })) : null;
+
+      var people = d.users.length ? h('div', { class: 'card' }, d.users.map(function (u) {
+        var rm = h('button', { class: 'linkbtn', style: 'color:var(--danger)' }, 'Remove');
+        rm.onclick = function () {
+          confirmBox('Remove ' + u.name + '?' + (u.chats ? ' I will also leave the ' + u.chats + (u.chats === 1 ? ' chat' : ' chats') + ' they added.' : '')).then(function (y) {
+            if (y) act(rm, function () { return api('removeUser', { userId: u.user_id }).then(function () { haptic('ok'); toast('🗑 Removed ' + u.name); refresh(); }); });
+          });
+        };
+        return h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { class: 'title', text: u.name }),
+          h('div', { class: 'meta', text: u.chats + (u.chats === 1 ? ' chat' : ' chats') + ' · joined ' + ago(u.added_at) })), rm);
+      })) : h('div', { class: 'card' }, h('div', { class: 'note', text: 'Nobody else has access yet.' }));
+
+      var codes = d.codes.length ? h('div', { class: 'card' }, d.codes.map(function (c) {
+        var del = h('button', { class: 'linkbtn', style: 'color:var(--danger)' }, 'Delete');
+        del.onclick = function () { act(del, function () { return api('deleteCode', { code: c.code }).then(function () { toast('Code deleted'); refresh(); }); }); };
+        var cp = h('button', { class: 'linkbtn', onclick: function () { copy(c.code); } }, 'Copy');
+        return h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { class: 'title', style: 'font-family:ui-monospace,Menlo,monospace', text: c.code }),
+          h('div', { class: 'meta', text: 'Created ' + ago(c.created_at) })), cp, del);
+      })) : null;
+
+      return h('div', null,
+        h('h1', { text: 'Access' }),
+        h('p', { class: 'sub', text: 'Each code works once. You can also approve requests here.' }),
+        newBtn, h('div', { style: 'height:10px' }), codeCard,
+        reqs ? [h('div', { class: 'section', text: 'Requests' }), reqs] : null,
+        h('div', { class: 'section', text: 'People with access' }), people,
+        codes ? [h('div', { class: 'section', text: 'Unused codes' }), codes] : null);
+    });
+  };
+
+  function ago(ms) {
+    if (!ms) return '';
+    var m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    var hh = Math.round(m / 60);
+    if (hh < 24) return hh + ' h ago';
+    var d = Math.round(hh / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+  function copy(text) {
+    var done = function () { haptic('ok'); toast('📋 Copied'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else fallback();
+    function fallback() {
+      var t = h('textarea', { style: 'position:fixed;opacity:0' }); t.value = text; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { alertBox(text); }
+      t.remove();
+    }
+  }
+
+  // refresh lists when coming back to the app (e.g. after adding the bot to a group)
+  document.addEventListener('visibilitychange', function () {
+    var cur = stack[stack.length - 1];
+    if (!document.hidden && cur && (cur.name === 'home' || cur.name === 'chat')) render();
+  });
+
+  stack = [{ name: initData ? 'boot' : 'outside' }];
+  render();
+})();
+</script>
+</body>
+</html>
