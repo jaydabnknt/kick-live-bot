@@ -98,6 +98,7 @@
 
   .warn { margin: 10px 0 0; padding: 11px 13px; border-radius: 12px; background: rgba(255, 176, 32, .13); color: #e0a020; font-size: 13.5px; }
   .note { padding: 12px 14px; color: var(--hint); font-size: 13.5px; }
+  .note code { font-family: ui-monospace, Menlo, monospace; color: var(--text); }
   .err { color: var(--danger); font-size: 13.5px; padding: 0 14px 12px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 4px; }
@@ -437,7 +438,8 @@
           if (s.pin) tags.push(h('span', { class: 'tag', text: '📌' }));
           return rowBtn({
             left: h('span', { class: 'dot' + (s.is_live ? ' live' : '') }),
-            title: s.slug, right: tags.length ? h('div', { style: 'display:flex;gap:6px' }, tags) : null,
+            title: s.slug, meta: s.topic ? '# ' + s.topic : null,
+            right: tags.length ? h('div', { style: 'display:flex;gap:6px' }, tags) : null,
             onclick: function () { go('sub', { id: s.id }); },
           });
         })) : h('div', { class: 'card' }, h('div', { class: 'note', text: 'No streamers yet. Add one below.' })),
@@ -464,6 +466,45 @@
       }
       var vars = sampleVars(s.slug);
       var offVars = Object.assign({}, vars, { viewers: '' });
+
+      // forum topic picker (only for groups with topics turned on)
+      var topicBlock = null, subLine = h('p', { class: 'sub' });
+      function topicLabel() {
+        if (!d.topics) return '';
+        if (!d.topics.current) return 'General';
+        var t = d.topics.list.filter(function (x) { return x.id === d.topics.current; })[0];
+        return t ? t.name : 'Topic #' + d.topics.current;
+      }
+      function drawSubLine() { subLine.textContent = 'kick.com/' + s.slug + ' → ' + s.chatTitle + (d.topics ? ' › ' + topicLabel() : ''); }
+      drawSubLine();
+      if (d.topics) {
+        var list = h('div', { class: 'card' });
+        var drawTopics = function () {
+          list.innerHTML = '';
+          [{ id: 0, name: 'General' }].concat(d.topics.list).forEach(function (t) {
+            var on = t.id === d.topics.current;
+            var row = h('button', { class: 'row', onclick: function () {
+              if (on) return;
+              haptic();
+              api('setTopic', { id: s.id, threadId: t.id }).then(function (r) {
+                d.topics.current = t.id; drawTopics(); drawSubLine(); toast('💬 Alerts now go to ' + r.name);
+              }).catch(function (e) { if (e.message !== 'locked') { haptic('err'); alertBox(e.message); } });
+            } },
+              h('div', { class: 'icon', text: '#' }),
+              h('div', { class: 'grow' }, h('div', { class: 'title', text: t.name })),
+              on ? h('span', { style: 'color:var(--accent);font-weight:700;font-size:18px', text: '✓' }) : null);
+            list.appendChild(row);
+          });
+        };
+        drawTopics();
+        topicBlock = [
+          h('div', { class: 'section', text: 'Post in topic' }),
+          list,
+          h('div', { class: 'note' }, 'Don’t see a topic? Open it in the group and send ',
+            h('code', { text: d.topics.here }), ' there once. New topics show up here by themselves. ',
+            h('button', { class: 'linkbtn', onclick: function () { copy(d.topics.here); } }, 'Copy command')),
+        ];
+      }
 
       var offlineBlock = h('div');
       function drawOffline() {
@@ -499,12 +540,13 @@
         h('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:6px' },
           h('h1', { style: 'margin:0', text: s.slug }),
           s.isLive ? h('span', { class: 'tag live', text: 'LIVE' }) : null),
-        h('p', { class: 'sub' }, 'kick.com/' + s.slug + ' → ' + s.chatTitle),
+        subLine,
 
         h('div', { class: 'card' },
           toggleRow('Alerts', s.enabled ? 'On' : 'Paused. Nothing is posted.', s.enabled, function (on, el) {
             set('enabled', on ? 1 : 0).then(function () { el.closest('.row').querySelector('.meta').textContent = on ? 'On' : 'Paused. Nothing is posted.'; });
           })),
+        topicBlock,
 
         h('div', { class: 'section', text: 'Live alert' }),
         h('div', { class: 'card' },
